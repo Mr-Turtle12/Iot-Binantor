@@ -2,11 +2,10 @@
 This repository is for my IoT device using ESP32 for university.
 
 Has three folder: 
-    BinESP32Script (This script connects to the Ibeacon and will send it's location to the pal esp)
-    PalESP32Script (This script takes in if it's bin day and check what's location the bins are in, and display a sad face and makes nose if in the wrong place)
-    WebscrappingBinDayAPI (This should be run on a computer and will run the webscrapping API for the Pal to find out what day it is)
-
-There will be two ESP32 controllers, with an API running on a different computer, for example, my laptop, due to the need for more power for web scraping.
+ - BinESP32Script (This script connects to the Ibeacon and will send it's location to the pal esp)
+ - PalESP32Script (This script takes in if it's bin day and check what's location the bins are in, and display a sad face and makes nose if in the wrong place)
+ - WebscrappingBinDayAPI (This should be run on a computer and will run the webscrapping API for the Pal to find out what day it is)
+ 
 
 To run:
 
