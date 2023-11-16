@@ -1,21 +1,18 @@
 #include <PicoMQTT.h>
-#include <HTTPClient.h>
 #include <PubSubClient.h>
 #include <Adafruit_GFX.h>
-#include <Max72xxPanel.h>  //  max7219 library
+#include <Max72xxPanel.h>  // max7219 library
 #include <WiFiManager.h>
-
 
 #define MQTT_BROKER "test.mosquitto.org"
 #define MQTT_PORT (1883)
-#define MQTT_SUBSCRIBE_TOPIC "uok/iot/wah20/subscribe"
-
+#define MQTT_BinDay_TOPIC "uok/iot/wah20/bin_day"
+#define MQTT_SetLocation_TOPIC "uok/iot/wah20/bin_day"
 
 String location;
 WiFiClient wifiClient;
 PubSubClient client(wifiClient);
 bool BinsOut = false;
-HTTPClient http;
 Max72xxPanel matrix = Max72xxPanel(5, 1, 1);
 
 const uint8_t SMILEY_FACE[] = {
@@ -50,75 +47,80 @@ void drawImage(const uint8_t* image, int size) {
   }
 }
 
-void setUpmatrix(){
+void setUpMatrix() {
   matrix.setIntensity(15);
   matrix.setRotation(0);
   matrix.fillScreen(0);
   matrix.write();
 }
+
+void updateDisplay() {
+  matrix.fillScreen(0);
+
+  if (BinsOut) {
+    if (location.equals("collect")) {
+      Serial.println("Smiley face - in the correct pos");
+      drawImage(SMILEY_FACE, sizeof(SMILEY_FACE) / sizeof(SMILEY_FACE[0]));
+    } else {
+      drawImage(SAD_FACE, sizeof(SAD_FACE) / sizeof(SAD_FACE[0]));
+      Serial.println("Sad face - not in correct pos");
+    }
+  } else {
+    drawImage(SMILEY_FACE, sizeof(SMILEY_FACE) / sizeof(SMILEY_FACE[0]));
+    Serial.println("Not Bin days - Smiley face");
+  }
+
+  matrix.write();
+}
+
 void callback(char* topic, byte* payload, unsigned int length) {
-  Serial.print(topic);
-  BinsOut = !BinsOut;
+  if (strcmp(topic, MQTT_BinDay_TOPIC) == 0) {
+    BinsOut = !BinsOut;
+  } else {
+    location = String((char*)payload);
+  }
+}
+
+void connectToMQTT() {
+  while (!client.connected()) {
+    if (client.connect(("ESP32-" + String(random(0xffff), HEX)).c_str())) {
+      Serial.println("MQTT connected.");
+      client.subscribe(MQTT_BinDay_TOPIC);
+      client.subscribe(MQTT_SetLocation_TOPIC);
+    } else {
+      Serial.printf("Failed, rc=%d. Retrying in 5 seconds.", client.state());
+      delay(5000);
+    }
+  }
+}
+
+void setupWiFi() {
+  WiFiManager wm;
+  bool res;
+  res = wm.autoConnect("BinPalSetUp", "password");
 }
 
 void setup() {
   // Setup serial
   Serial.begin(115200);
 
-  setUpmatrix();
+  setUpMatrix();
 
   // Connect to WiFi
-  WiFiManager wm;
-  bool res;
-  res = wm.autoConnect("BinPalSetUp","password"); 
+  setupWiFi();
 
-  //Connect to both API
-  client.setServer(MQTT_BROKER, MQTT_PORT);  // set broker settings
-  client.setCallback(callback);           
-  while (!client.connected()) {              // check connected status
-    if (client.connect(("ESP32-" + String(random(0xffff), HEX)).c_str())) {  // connect with random id
-      Serial.println("MQTT connected.");                                   // report success
-      client.subscribe(MQTT_SUBSCRIBE_TOPIC);                              // subscribe to the chosen topic
-    } else {
-      Serial.printf(" failed , rc=%d try again in 5 seconds", client.state());  // report error
-      delay(5000);                                                              // wait 5 seconds
-    }
-  }
-  http.begin("http://esp32config/");
+  // Connect to MQTT broker
+  client.setServer(MQTT_BROKER, MQTT_PORT);
+  client.setCallback(callback);
 
+  connectToMQTT();
 }
 
 void loop() {
-
-  matrix.fillScreen(0);
-  matrix.write();
+  updateDisplay();
   Serial.println(BinsOut);
   Serial.println(location);
-  if (BinsOut) {
-    if (location == ("Collect")) {
-      Serial.println("simily face - in the correct pos");
-      drawImage(SMILEY_FACE, sizeof(SMILEY_FACE) / sizeof(SMILEY_FACE[0]));
 
-    } else {
-      drawImage(SAD_FACE, sizeof(SAD_FACE) / sizeof(SAD_FACE[0]));
-      Serial.println("sad face - not in correct pos");
-
-    }
-  } else {
-    drawImage(SMILEY_FACE, sizeof(SMILEY_FACE) / sizeof(SMILEY_FACE[0]));
-    Serial.println("Not Bin days - Simily face");
-  }
-  matrix.write();
   client.loop();
-
-  int httpCode = http.GET();
-  if (httpCode > 0) {
-    String payload = http.getString();
-    location = payload;
-  } else {
-    Serial.println("Error on HTTP request");
-  }
-  http.end();  // Close connection
-
   delay(5000);
 }
