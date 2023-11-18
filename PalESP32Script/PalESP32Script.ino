@@ -6,8 +6,9 @@
 
 #define MQTT_BROKER "test.mosquitto.org"
 #define MQTT_PORT (1883)
-#define MQTT_BinDay_TOPIC "uok/iot/wah20/bin_day"
-#define MQTT_SetLocation_TOPIC "uok/iot/wah20/bin_day"
+#define MQTT_SetLocation_TOPIC "uok/iot/wah20/setLocation"
+#define MQTT_BinTime_TOPIC "uok/iot/wah20/binTime"
+
 
 String location;
 WiFiClient wifiClient;
@@ -74,19 +75,38 @@ void updateDisplay() {
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
-  if (strcmp(topic, MQTT_BinDay_TOPIC) == 0) {
+  Serial.println("Incoming message:");
+
+  Serial.println(topic);
+  String receivedMessage;
+  receivedMessage.reserve(length + 1);  // +1 for the null terminator  
+  for (int i = 0; i < length; i++) {
+        receivedMessage += (char)payload[i];
+  }
+  Serial.println(receivedMessage);
+
+  if (strcmp(topic, MQTT_BinTime_TOPIC) == 0) {
+    Serial.println("Changed Bin Day");
     BinsOut = !BinsOut;
   } else {
-    location = String((char*)payload);
+    if(receivedMessage.equals("Location ")){
+      Serial.println("Send out what the location of the bin is");
+      client.publish("uok/iot/wah20/setLocation",  location.c_str());
+    }else{
+      Serial.println("Location saved");
+      location = receivedMessage;
+    }
   }
+  Serial.println("Finished message logic");
+
 }
 
 void connectToMQTT() {
   while (!client.connected()) {
     if (client.connect(("ESP32-" + String(random(0xffff), HEX)).c_str())) {
-      Serial.println("MQTT connected.");
-      client.subscribe(MQTT_BinDay_TOPIC);
+      //Serial.println("MQTT connected.");
       client.subscribe(MQTT_SetLocation_TOPIC);
+      client.subscribe(MQTT_BinTime_TOPIC);
     } else {
       Serial.printf("Failed, rc=%d. Retrying in 5 seconds.", client.state());
       delay(5000);
@@ -114,12 +134,17 @@ void setup() {
   client.setCallback(callback);
 
   connectToMQTT();
+  //Set Location to store and wait till you get the other esp32 to tell you if it's moved
+  location = "store";
 }
 
 void loop() {
   updateDisplay();
+  Serial.println(">>>>>>>>>>>>>>>>");
+  Serial.println("Vars:");
   Serial.println(BinsOut);
   Serial.println(location);
+  Serial.println(">>>>>>>>>>>>>>>>");
 
   client.loop();
   delay(5000);
