@@ -11,7 +11,7 @@
 int Collect_pos = 0;
 int Store_pos = 0;
 int BeaconRSSI;
-char current_location = "";
+String current_location = "";
 WiFiClient espClient;
 PubSubClient client(espClient);
 
@@ -26,6 +26,34 @@ class MyAdvertisedDeviceCallbacks : public BLEAdvertisedDeviceCallbacks
   }
 };
 
+
+void callback(char* topic, byte* payload, unsigned int length) {
+  Serial.println("Incoming message:");
+  Serial.println(topic);
+  String receivedMessage;
+  receivedMessage.reserve(length + 1);  // +1 for the null terminator  
+  for (int i = 0; i < length; i++) {
+        receivedMessage += (char)payload[i];
+  }
+  if(strcmp(topic, "uok/iot/wah20/setLocation") == 0){ 
+    if (receivedMessage.equals("setcollect"))
+    {
+      Collect_pos = BeaconRSSI;
+      Serial.println("Set Collect");
+    }
+    else if (receivedMessage.equals("setstore"))
+    {
+      Store_pos = BeaconRSSI;
+      Serial.println("Set Store");
+    }
+    savePositionsToEEPROM();
+  }else if (strcmp(topic, "uok/iot/wah20/getLocation") == 0){
+    publishLocation();
+  }
+  Serial.println("Finished logic for message");
+}
+
+
 void connectMQTT()
 {
   while (!client.connected())
@@ -35,6 +63,7 @@ void connectMQTT()
     {
       Serial.println("Connected to MQTT broker");
       client.subscribe("uok/iot/wah20/setLocation");
+      client.subscribe("uok/iot/wah20/getLocation");
     }
     else
     {
@@ -49,7 +78,6 @@ void connectMQTT()
 void setupWiFi()
 {
   WiFiManager wm;
-  wm.resetSettings();
   bool res;
   res = wm.autoConnect("BLEsensorSetUp", "password");
 
@@ -78,33 +106,24 @@ void savePositionsToEEPROM()
   EEPROM.commit();
 }
 
-void handleMQTTMessage(String message)
-{
-  if (message.equals("collect"))
-  {
-    Collect_pos = BeaconRSSI;
-    Serial.println("Set Collect");
-  }
-  else if (message.equals("store"))
-  {
-    Store_pos = BeaconRSSI;
-    Serial.println("Set Store");
-  }
-  savePositionsToEEPROM();
-}
 
 void publishLocation()
 {
-  String location = (Collect_pos > Store_pos) ? "collect" : "store";
-  if (current_location != location)
-  {
-    client.publish("uok/iot/wah20/location", location.c_str());
-    current_location = location;
-  }
+  client.publish("uok/iot/wah20/currentLocation", current_location.c_str());
+  Serial.print("Publish location:");
+  Serial.println(current_location);
 }
 
 void loop()
 {
+  Serial.println(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
+  Serial.println("Start loop");
+  Serial.print("Store:");
+  Serial.println(Store_pos);
+  Serial.print("Collect");
+  Serial.println(Collect_pos);
+  Serial.println(current_location);
+
   if (!client.connected())
   {
     connectMQTT();
@@ -118,6 +137,10 @@ void loop()
   BLEScanResults _ = pBLEScan->start(5); // wait for scanning
 
   pBLEScan->clearResults();
-
-  publishLocation();
+  String location = (abs(Collect_pos - BeaconRSSI) < abs(Store_pos - BeaconRSSI)) ? "collect" : "store";
+  if (current_location != location)
+  {
+    current_location = location;
+    publishLocation();
+  }
 }
