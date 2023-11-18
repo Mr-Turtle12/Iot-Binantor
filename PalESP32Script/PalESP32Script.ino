@@ -6,7 +6,7 @@
 
 #define MQTT_BROKER "test.mosquitto.org"
 #define MQTT_PORT (1883)
-#define MQTT_SetLocation_TOPIC "uok/iot/wah20/setLocation"
+#define MQTT_SetLocation_TOPIC "uok/iot/wah20/currentLocation"
 #define MQTT_BinTime_TOPIC "uok/iot/wah20/binTime"
 
 
@@ -38,6 +38,18 @@ const uint8_t SAD_FACE[] = {
   0b00111100
 };
 
+const uint8_t Confused[] = {
+{
+  0b00111000,
+  0b01000100,
+  0b00000100,
+  0b00000100,
+  0b00011000,
+  0b00010000,
+  0b00000000,
+  0b00010000
+}};
+
 void drawImage(const uint8_t* image, int size) {
   for (int i = 0; i < size; i++) {
     for (int j = 0; j < 8; j++) {
@@ -67,8 +79,13 @@ void updateDisplay() {
       Serial.println("Sad face - not in correct pos");
     }
   } else {
-    drawImage(SMILEY_FACE, sizeof(SMILEY_FACE) / sizeof(SMILEY_FACE[0]));
-    Serial.println("Not Bin days - Smiley face");
+    if (location.equals("collect")) {
+      drawImage(SMILEY_FACE, sizeof(Confused) / sizeof(SMILEY_FACE[0]));
+      Serial.println("Show ? as it shouldn't be left in collect pos");
+    }else{
+      drawImage(SMILEY_FACE, sizeof(SMILEY_FACE) / sizeof(SMILEY_FACE[0]));
+      Serial.println("Not Bin days - Smiley face");
+    }
   }
 
   matrix.write();
@@ -86,16 +103,15 @@ void callback(char* topic, byte* payload, unsigned int length) {
   Serial.println(receivedMessage);
 
   if (strcmp(topic, MQTT_BinTime_TOPIC) == 0) {
-    Serial.println("Changed Bin Day");
-    BinsOut = !BinsOut;
-  } else {
-    if(receivedMessage.equals("Location ")){
-      Serial.println("Send out what the location of the bin is");
-      client.publish("uok/iot/wah20/setLocation",  location.c_str());
+    if(receivedMessage.equals("true")){
+      BinsOut = true;
     }else{
-      Serial.println("Location saved");
-      location = receivedMessage;
+      BinsOut = false;
     }
+  } else {
+      Serial.print("Location saved as");
+      Serial.println(receivedMessage);
+      location = receivedMessage;
   }
   Serial.println("Finished message logic");
 
