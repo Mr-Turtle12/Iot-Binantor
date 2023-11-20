@@ -38,8 +38,8 @@ const uint8_t SAD_FACE[] = {
   0b00111100
 };
 
+
 const uint8_t Confused[] = {
-{
   0b00111000,
   0b01000100,
   0b00000100,
@@ -48,7 +48,7 @@ const uint8_t Confused[] = {
   0b00010000,
   0b00000000,
   0b00010000
-}};
+};
 
 void drawImage(const uint8_t* image, int size) {
   for (int i = 0; i < size; i++) {
@@ -80,7 +80,7 @@ void updateDisplay() {
     }
   } else {
     if (location.equals("collect")) {
-      drawImage(SMILEY_FACE, sizeof(Confused) / sizeof(SMILEY_FACE[0]));
+      drawImage(Confused, sizeof(Confused) / sizeof(Confused[0]));
       Serial.println("Show ? as it shouldn't be left in collect pos");
     }else{
       drawImage(SMILEY_FACE, sizeof(SMILEY_FACE) / sizeof(SMILEY_FACE[0]));
