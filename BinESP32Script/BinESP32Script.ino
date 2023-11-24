@@ -83,60 +83,23 @@ void setupWiFi()
 
   Serial.println("Connected to WiFi network!");
   Serial.println("Connected!");
-}
+  server.on("/", handleRoot);
+  server.on("/Setup", SetsButton);
+  server.on("/collect", SetCollect);
+  server.on("/store", SetStore);
 
-void setup()
-{
-  Serial.begin(115200);
-  setupWiFi();
-
-  client.setServer("test.mosquitto.org", 1883);
-  client.setCallback(callback);
-  connectMQTT();
-
-  EEPROM.begin(512);
-  Collect_pos = EEPROM.readInt(COLLECT_POS_ADDR);
-  Store_pos = EEPROM.readInt(STORE_POS_ADDR);
-}
-
-void savePositionsToEEPROM()
-{
-  EEPROM.writeInt(COLLECT_POS_ADDR, Collect_pos);
-  EEPROM.writeInt(STORE_POS_ADDR, Store_pos);
-  EEPROM.commit();
+  server.begin();
+  Serial.println("HTTP server started");
 }
 
 
-void publishLocation()
-{
-  client.publish("uok/iot/wah20/currentLocation", current_location.c_str());
-  Serial.print("Publish location:");
-  Serial.println(current_location);
-}
-
-void loop()
-{
-  Serial.println(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
-  Serial.println("Start loop");
-  Serial.print("Store:");
-  Serial.println(Store_pos);
-  Serial.print("Collect");
-  Serial.println(Collect_pos);
-  Serial.print(current_location);
-  Serial.println(BeaconRSSI);
-
-
-  if (!client.connected())
-  {
-    connectMQTT();
-  }
-  client.loop();
-
+void loop() {
+  server.handleClient();
   BLEDevice::init("");
   BLEScan *pBLEScan = BLEDevice::getScan();
   pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks());
-  pBLEScan->setActiveScan(true); // start to scan
-  BLEScanResults _ = pBLEScan->start(1); // wait for scanning
+  pBLEScan->setActiveScan(true);                   // start to scan
+  BLEScanResults _ = pBLEScan->start(5);  // wait for scanning
 
   pBLEScan->clearResults();
   String location = (abs(Collect_pos - BeaconRSSI) < abs(Store_pos - BeaconRSSI)) ? "collect" : "store";
