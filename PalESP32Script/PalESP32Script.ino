@@ -14,6 +14,7 @@ String location;
 WiFiClient wifiClient;
 PubSubClient client(wifiClient);
 bool BinsOut = false;
+bool debug = false;
 Max72xxPanel matrix = Max72xxPanel(5, 1, 1);
 
 const uint8_t SMILEY_FACE[] = {
@@ -42,9 +43,9 @@ const uint8_t SAD_FACE[] = {
 const uint8_t Confused[] = {
   0b00111000,
   0b01000100,
-  0b00000100,
-  0b00000100,
-  0b00011000,
+  0b01000000,
+  0b00100000,
+  0b00110000,
   0b00010000,
   0b00000000,
   0b00010000
@@ -72,49 +73,19 @@ void updateDisplay() {
 
   if (BinsOut) {
     if (location.equals("collect")) {
-      Serial.println("Smiley face - in the correct pos");
       drawImage(SMILEY_FACE, sizeof(SMILEY_FACE) / sizeof(SMILEY_FACE[0]));
     } else {
       drawImage(SAD_FACE, sizeof(SAD_FACE) / sizeof(SAD_FACE[0]));
-      Serial.println("Sad face - not in correct pos");
     }
   } else {
     if (location.equals("collect")) {
       drawImage(Confused, sizeof(Confused) / sizeof(Confused[0]));
-      Serial.println("Show ? as it shouldn't be left in collect pos");
     }else{
       drawImage(SMILEY_FACE, sizeof(SMILEY_FACE) / sizeof(SMILEY_FACE[0]));
-      Serial.println("Not Bin days - Smiley face");
     }
   }
 
   matrix.write();
-}
-
-void callback(char* topic, byte* payload, unsigned int length) {
-  Serial.println("Incoming message:");
-
-  Serial.println(topic);
-  String receivedMessage;
-  receivedMessage.reserve(length + 1);  // +1 for the null terminator  
-  for (int i = 0; i < length; i++) {
-        receivedMessage += (char)payload[i];
-  }
-  Serial.println(receivedMessage);
-
-  if (strcmp(topic, MQTT_BinTime_TOPIC) == 0) {
-    if(receivedMessage.equals("true")){
-      BinsOut = true;
-    }else{
-      BinsOut = false;
-    }
-  } else {
-      Serial.print("Location saved as");
-      Serial.println(receivedMessage);
-      location = receivedMessage;
-  }
-  Serial.println("Finished message logic");
-
 }
 
 void connectToMQTT() {
@@ -152,16 +123,41 @@ void setup() {
   connectToMQTT();
   //Set Location to store and wait till you get the other esp32 to tell you if it's moved
   location = "store";
+  updateDisplay();
+}
+
+
+void callback(char* topic, byte* payload, unsigned int length) {
+  String receivedMessage;
+  receivedMessage.reserve(length + 1);  // +1 for the null terminator  
+  for (int i = 0; i < length; i++) {
+        receivedMessage += (char)payload[i];
+  }
+  if(debug){
+    Serial.println("Incoming message:");
+    Serial.println(topic);
+    Serial.println(receivedMessage);
+  }
+
+  if (strcmp(topic, MQTT_BinTime_TOPIC) == 0) {
+    if(receivedMessage.equals("true")){
+      BinsOut = true;
+    }else{
+      BinsOut = false;
+    }
+  } else {
+      location = receivedMessage;
+  }
+  updateDisplay(); // Update the 8x8 display
 }
 
 void loop() {
-  updateDisplay();
-  Serial.println(">>>>>>>>>>>>>>>>");
-  Serial.println("Vars:");
-  Serial.println(BinsOut);
-  Serial.println(location);
-  Serial.println(">>>>>>>>>>>>>>>>");
-
-  client.loop();
-  delay(5000);
+  if(debug){
+    Serial.println(">>>>>>>>>>>>>>>>");
+    Serial.println("Vars:");
+    Serial.println(BinsOut);
+    Serial.println(location);
+    Serial.println(">>>>>>>>>>>>>>>>");
+  }
+  client.loop(); //check for any incoming messages
 }

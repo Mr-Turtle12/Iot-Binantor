@@ -11,9 +11,17 @@
 int Collect_pos = 0;
 int Store_pos = 0;
 int BeaconRSSI;
+int count = 0;
 String current_location = "";
 WiFiClient espClient;
 PubSubClient client(espClient);
+
+void publishLocation()
+{
+  client.publish("uok/iot/wah20/currentLocation", current_location.c_str());
+  Serial.print("Publish location:");
+  Serial.println(current_location);
+}
 
 class MyAdvertisedDeviceCallbacks : public BLEAdvertisedDeviceCallbacks
 {
@@ -22,6 +30,17 @@ class MyAdvertisedDeviceCallbacks : public BLEAdvertisedDeviceCallbacks
     if (advertisedDevice.getAddress() == BLEAddress("fd:d3:6f:39:97:b8"))
     {
       BeaconRSSI = advertisedDevice.getRSSI();
+      String location = (abs(Collect_pos - BeaconRSSI) < abs(Store_pos - BeaconRSSI)) ? "collect" : "store";
+      if (current_location != location)
+      {
+        if(count < 3){
+          count++;
+        }else{
+          current_location = location;
+          publishLocation();
+          count = 0;
+        }
+      }
     }
   }
 };
@@ -83,29 +102,78 @@ void setupWiFi()
 
   Serial.println("Connected to WiFi network!");
   Serial.println("Connected!");
-  server.on("/", handleRoot);
-  server.on("/Setup", SetsButton);
-  server.on("/collect", SetCollect);
-  server.on("/store", SetStore);
-
-  server.begin();
-  Serial.println("HTTP server started");
 }
 
+void setup()
+{
+  Serial.begin(115200);
+  setupWiFi();
 
-void loop() {
-  server.handleClient();
+  client.setServer("test.mosquitto.org", 1883);
+  client.setCallback(callback);
+  connectMQTT();
+
+  EEPROM.begin(512);
+  Collect_pos = EEPROM.readInt(COLLECT_POS_ADDR);
+  Store_pos = EEPROM.readInt(STORE_POS_ADDR);
+}
+
+void savePositionsToEEPROM()
+{
+  EEPROM.writeInt(COLLECT_POS_ADDR, Collect_pos);
+  EEPROM.writeInt(STORE_POS_ADDR, Store_pos);
+  EEPROM.commit();
+}
+
+void bluetoothLoop(){
   BLEDevice::init("");
   BLEScan *pBLEScan = BLEDevice::getScan();
   pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks());
-  pBLEScan->setActiveScan(true);                   // start to scan
-  BLEScanResults _ = pBLEScan->start(5);  // wait for scanning
-
+  pBLEScan->setActiveScan(true); // start to scan
+  BLEScanResults _ = pBLEScan->start(5); // wait for scanning
   pBLEScan->clearResults();
-  String location = (abs(Collect_pos - BeaconRSSI) < abs(Store_pos - BeaconRSSI)) ? "collect" : "store";
-  if (current_location != location)
-  {
-    current_location = location;
-    publishLocation();
-  }
+
 }
+
+void loop()
+{
+  if(debug){
+    Serial.println(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
+    Serial.println("Start loop");
+    Serial.print("Store:");
+    Serial.println(Store_pos);
+    Serial.print("Collect");
+    Serial.println(Collect_pos);
+    Serial.println(current_location);
+  }
+
+  if (!client.connected())
+  {
+    connectMQTT();
+  }
+  client.loop();
+  bluetoothLoop(); //sets up the bluetooth loop
+}
+
+class MyAdvertisedDeviceCallbacks : public BLEAdvertisedDeviceCallbacks
+{
+  void onResult(BLEAdvertisedDevice advertisedDevice)
+  {
+    if (advertisedDevice.getAddress() == BLEAddress("fd:d3:6f:39:97:b8"))
+    {
+      BeaconRSSI = advertisedDevice.getRSSI();
+      //See if the location has changed or if it's stay the same
+      String location = (abs(Collect_pos - BeaconRSSI) < abs(Store_pos - BeaconRSSI)) ? "collect" : "store"; 
+      if (current_location != location)
+      {
+        if(count < 3){
+          count++;
+        }else{
+          current_location = location;
+          publishLocation();
+          count = 0;
+        }
+      }
+    }
+  }
+};
